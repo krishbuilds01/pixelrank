@@ -29,6 +29,7 @@ Sign up -> save handles -> Sync -> the server calls each platform, stores the ra
 ## Contests
 - Codeforces rounds come live from the official API, cached for an hour.
 - LeetCode Weekly (Sunday 8:00 AM IST), Biweekly (Saturday 8:00 PM IST) and CodeChef Starters (Wednesday 8:00 PM IST) run on fixed weekly schedules, so the next date is computed, not scraped.
+- The contest calendar (src/lib/calendar.ts) builds a full month from the same sources: live Codeforces rounds placed on their IST dates, Weekly on every Sunday, Starters on every Wednesday, Biweekly on alternate Saturdays anchored to a known Biweekly date.
 
 ## What is not in yet (next improvements)
 - Email reminders for contests (the contest data is ready for it)

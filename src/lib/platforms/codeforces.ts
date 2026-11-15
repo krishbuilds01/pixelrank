@@ -22,6 +22,6 @@ export async function fetchCfContests(): Promise<CfContest[]> {
   const res = await fetch("https://codeforces.com/api/contest.list?gym=false", { next: { revalidate: 3600 }, signal: AbortSignal.timeout(10000) });
   const json = await res.json();
   if (json.status !== "OK") throw new Error("contests unavailable");
-  return json.result.filter((c: { phase: string }) => c.phase === "BEFORE").slice(0, 6)
+  return json.result.filter((c: { phase: string }) => c.phase === "BEFORE").slice(0, 30)
     .map((c: { name: string; startTimeSeconds: number; id: number }) => ({ name: c.name, start: new Date(c.startTimeSeconds * 1000).toISOString(), url: `https://codeforces.com/contest/${c.id}` }));
 }

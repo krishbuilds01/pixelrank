@@ -1,11 +1,14 @@
 import SectionHead from "@/components/SectionHead";
 import { getContests } from "@/lib/contests";
+import ContestCalendar from "@/components/ContestCalendar";
 export const dynamic = "force-dynamic";
 export default async function ContestsPage() {
   const contests = await getContests().catch(() => []);
   return (
     <main className="dotgrid flex-1"><section className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
-      <SectionHead no="01" label="Boss fights" title="CONTESTS" sub="Codeforces rounds are live from their API. LeetCode weekly / biweekly and CodeChef Starters run on a fixed weekly schedule, so their next rounds are computed from that schedule. Times in IST." />
+      <SectionHead no="01" label="Boss fights" title="CONTEST CALENDAR" sub="Codeforces rounds are live from their API. LeetCode Weekly runs every Sunday, Biweekly every second Saturday, and CodeChef Starters every Wednesday - those are placed from their fixed schedules. Times in IST. Click any day to see its contests." />
+      <ContestCalendar />
+      <div className="mt-14"><SectionHead no="02" label="Coming up" title="NEXT CONTESTS" /></div>
       <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
         {contests.map((c) => (
           <a key={c.name + c.start} href={c.url} target="_blank" rel="noreferrer" className="px-card block p-5 hover:border-mint">
