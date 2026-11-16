@@ -19,7 +19,7 @@ const steps = [
 ];
 
 export default async function Home() {
-  const real = boardRows();
+  const real = await boardRows();
   const rows = real.length > 0 ? real.slice(0, 5) : sample;
   const contests = await getContests().catch(() => []);
   const quests = questsFor(["graph", "dynamic programming"], true);

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import db from "@/lib/db";
+import { q1, run } from "@/lib/db";
 import { hashPassword, createSession, newId } from "@/lib/auth";
 import { ensureProfile } from "@/lib/sync";
 import { rateLimit } from "@/lib/ratelimit";
@@ -10,12 +10,12 @@ export async function POST(req: Request) {
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Check your details - name, a valid email and a password of 8+ characters" }, { status: 400 });
   const d = parsed.data;
-  const exists = db.prepare("SELECT id FROM users WHERE email = ?").get(d.email.toLowerCase());
+  const exists = await q1("SELECT id FROM users WHERE email = ?", [d.email.toLowerCase()]);
   if (exists) return NextResponse.json({ error: "An account with this email already exists" }, { status: 409 });
   const id = newId();
-  db.prepare("INSERT INTO users (id, name, email, password_hash, college, country, branch, batch, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .run(id, d.name, d.email.toLowerCase(), await hashPassword(d.password), d.college ?? "", d.country ?? "India", d.branch ?? "", d.batch ?? null, new Date().toISOString());
-  ensureProfile(id);
+  await run("INSERT INTO users (id, name, email, password_hash, college, country, branch, batch, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    [id, d.name, d.email.toLowerCase(), await hashPassword(d.password), d.college ?? "", d.country ?? "India", d.branch ?? "", d.batch ?? null, new Date().toISOString()]);
+  await ensureProfile(id);
   await createSession(id);
   return NextResponse.json({ ok: true });
 }

@@ -1,19 +1,19 @@
-import db, { type ProfileRow } from "./db";
+import { q1, run, type ProfileRow } from "./db";
 import { fetchCodeforces } from "./platforms/codeforces";
 import { fetchLeetcode } from "./platforms/leetcode";
 import { fetchCodechef } from "./platforms/codechef";
 import { unifiedScore, xpFor, levelFor } from "./scoring";
 
-export function getProfile(userId: string): ProfileRow | null {
-  return (db.prepare("SELECT * FROM profiles WHERE user_id = ?").get(userId) as ProfileRow | undefined) ?? null;
+export async function getProfile(userId: string): Promise<ProfileRow | null> {
+  return q1<ProfileRow>("SELECT * FROM profiles WHERE user_id = ?", [userId]);
 }
-export function ensureProfile(userId: string) {
-  if (!getProfile(userId)) db.prepare("INSERT INTO profiles (user_id, updated_at) VALUES (?, ?)").run(userId, new Date().toISOString());
+export async function ensureProfile(userId: string) {
+  if (!(await getProfile(userId))) await run("INSERT INTO profiles (user_id, updated_at) VALUES (?, ?)", [userId, new Date().toISOString()]);
 }
 
 export async function syncUser(userId: string) {
-  ensureProfile(userId);
-  const p = getProfile(userId)!;
+  await ensureProfile(userId);
+  const p = (await getProfile(userId))!;
   const errors: string[] = [];
   let cf = p.cf_rating, cfMax = p.cf_max_rating, lc = p.lc_rating, lcSolved = p.lc_solved, cc = p.cc_rating, ccStars = p.cc_stars;
   let solvedTotal = lcSolved ?? 0;
@@ -27,7 +27,7 @@ export async function syncUser(userId: string) {
   const xp = xpFor(score, solvedTotal);
   const now = new Date().toISOString();
   const status = !hasAny ? "no-handles" : errors.length === 0 ? "ok" : (cf == null && lc == null && cc == null ? "failed" : "partial");
-  db.prepare(`UPDATE profiles SET cf_rating=?, cf_max_rating=?, lc_rating=?, lc_solved=?, cc_rating=?, cc_stars=?, score=?, xp=?, level=?, sync_status=?, sync_error=?, last_synced_at=?, updated_at=? WHERE user_id=?`)
-    .run(cf, cfMax, lc, lcSolved, cc, ccStars, score, xp, levelFor(xp), status, errors.join(" · ") || null, now, now, userId);
+  await run(`UPDATE profiles SET cf_rating=?, cf_max_rating=?, lc_rating=?, lc_solved=?, cc_rating=?, cc_stars=?, score=?, xp=?, level=?, sync_status=?, sync_error=?, last_synced_at=?, updated_at=? WHERE user_id=?`,
+    [cf, cfMax, lc, lcSolved, cc, ccStars, score, xp, levelFor(xp), status, errors.join(" · ") || null, now, now, userId]);
   return getProfile(userId);
 }

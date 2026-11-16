@@ -7,14 +7,14 @@ export const dynamic = "force-dynamic";
 export default async function LeaderboardPage({ searchParams }: { searchParams: Promise<{ scope?: string; college?: string; country?: string; branch?: string; batch?: string }> }) {
   const sp = await searchParams;
   const scope = sp.scope ?? "global";
-  let rows = boardRows();
+  let rows = await boardRows();
   const colleges = [...new Set(rows.map((r) => r.college).filter(Boolean))];
   const countries = [...new Set(rows.map((r) => r.country).filter(Boolean))];
   if (scope === "college" && sp.college) rows = rows.filter((r) => r.college === sp.college);
   if (scope === "country" && sp.country) rows = rows.filter((r) => r.country === sp.country);
   if (sp.branch) rows = rows.filter((r) => r.branch === sp.branch);
   if (sp.batch) rows = rows.filter((r) => String(r.batch) === sp.batch);
-  const vs = collegeRows();
+  const vs = await collegeRows();
   const tab = (href: string, label: string, active: boolean) => <Link key={label} href={href} className={`px-btn px-3 py-1.5 font-mono text-[13px] ${active ? "bg-sun text-black" : "bg-panel2 text-cream"}`}>{label}</Link>;
   return (
     <main className="dotgrid flex-1">

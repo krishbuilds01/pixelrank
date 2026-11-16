@@ -1,29 +1,53 @@
-// Demo data for local development. Run: npm run db:seed
-import { DatabaseSync } from "node:sqlite";
+// Seeds demo players so the boards are not empty. Local: SQLite file. With DATABASE_URL set: Postgres (Supabase).
 import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
-import fs from "node:fs";
-fs.mkdirSync("data", { recursive: true });
-const db = new DatabaseSync("data/pixelrank.db");
-db.exec(`CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, college TEXT NOT NULL DEFAULT '', country TEXT NOT NULL DEFAULT 'India', branch TEXT NOT NULL DEFAULT '', batch INTEGER, is_public INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at TEXT NOT NULL, created_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS profiles (user_id TEXT PRIMARY KEY, cf_handle TEXT, lc_handle TEXT, cc_handle TEXT, cf_rating INTEGER, cf_max_rating INTEGER, lc_rating INTEGER, lc_solved INTEGER, cc_rating INTEGER, cc_stars INTEGER, score INTEGER NOT NULL DEFAULT 0, xp INTEGER NOT NULL DEFAULT 0, level INTEGER NOT NULL DEFAULT 1, sync_status TEXT NOT NULL DEFAULT 'never', sync_error TEXT, last_synced_at TEXT, updated_at TEXT NOT NULL);`);
-const demo = [
-  ["Aarav Mehta", "aarav", "LPU", "CSE", 2027, 1682, 2145, 2362],
-  ["Sana Iqbal", "sana", "LPU", "CSE", 2026, 1710, 2080, 2193],
-  ["Rohan Verma", "rohan", "LPU", "ECE", 2027, 1590, 1995, 2275],
-  ["Meera Nair", "meera", "VIT", "CSE", 2028, 1480, 1810, 2056],
-  ["Dev Patel", "dev", "VIT", "IT", 2026, 1425, 1740, 1975],
-  ["Isha Singh", "isha", "SRM", "ECE", 2027, 1390, 1690, 1887],
+
+const players = [
+  ["Aarav Mehta", "aarav", "LPU", "CSE", 2027, 2145, 1682, 2362],
+  ["Sana Iqbal", "sana", "LPU", "CSE", 2026, 2080, 1710, 2193],
+  ["Rohan Verma", "rohan", "LPU", "ECE", 2027, 1995, 1590, 2275],
+  ["Meera Nair", "meera", "VIT", "CSE", 2028, 1810, 1480, 2056],
+  ["Kabir Singh", "kabir", "SRM", "CSE", 2027, 1725, 1520, 1980],
+  ["Isha Rao", "isha", "LPU", "CSE", 2028, 1650, 1410, 1875],
 ];
+const scoreOf = (lc, cf, cc) => Math.round(cf * 0.4 + lc * 0.35 + cc * 0.8 * 0.25);
+const xpOf = (score, solved) => score * 4 + solved * 10;
+const levelFor = (xp) => Math.floor(Math.sqrt(xp / 250)) + 1;
+const stars = (r) => (r >= 2500 ? 7 : r >= 2200 ? 6 : r >= 2000 ? 5 : r >= 1800 ? 4 : r >= 1600 ? 3 : r >= 1400 ? 2 : 1);
 const hash = bcrypt.hashSync("demo1234", 10);
-const score = (cf, lc, cc) => Math.round((cf * 0.4 + lc * 0.35 + cc * 0.8 * 0.25) / 1);
-for (const [name, handle, college, branch, batch, cf, lc, cc] of demo) {
-  const id = randomUUID(); const now = new Date().toISOString();
-  db.prepare("INSERT OR IGNORE INTO users (id,name,email,password_hash,college,country,branch,batch,created_at) VALUES (?,?,?,?,?,?,?, ?,?)").run(id, name, `${handle}@demo.pixelrank`, hash, college, "India", branch, batch, now);
-  const u = db.prepare("SELECT id FROM users WHERE email=?").get(`${handle}@demo.pixelrank`);
-  const s = score(cf, lc, cc); const xp = s * 4 + 1200; const level = Math.max(1, Math.floor(Math.sqrt(xp / 250)) + 1);
-  db.prepare("INSERT OR REPLACE INTO profiles (user_id,cf_handle,lc_handle,cc_handle,cf_rating,cf_max_rating,lc_rating,lc_solved,cc_rating,cc_stars,score,xp,level,sync_status,last_synced_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-    .run(u.id, handle, handle, handle, cf, cf + 60, lc, 320, cc, 4, s, xp, level, "ok", now, now);
+const now = new Date().toISOString();
+
+const usePg = Boolean(process.env.DATABASE_URL);
+let query;
+if (usePg) {
+  const { default: pg } = await import("pg");
+  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+  query = async (sql, params) => { let i = 0; const r = await pool.query(sql.replace(/\?/g, () => `$${++i}`), params); return r.rows; };
+  process.on("exit", () => pool.end());
+} else {
+  const { DatabaseSync } = await import("node:sqlite");
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const dir = path.join(process.cwd(), "data");
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const db = new DatabaseSync(path.join(dir, "pixelrank.db"));
+  query = async (sql, params) => db.prepare(sql).all(...params);
+  var runSql = (sql, params) => db.prepare(sql).run(...params);
+  query.run = runSql;
 }
-console.log("seeded", demo.length, "demo users (password: demo1234)");
+const run = query.run ?? (async (sql, params) => { await query(sql, params); });
+
+for (const [name, handle, college, branch, batch, lc, cf, cc] of players) {
+  const email = `${handle}@demo.pixelrank`;
+  await run(`INSERT INTO users (id,name,email,password_hash,college,country,branch,batch,created_at) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT (email) DO NOTHING`,
+    [randomUUID(), name, email, hash, college, "India", branch, batch, now]);
+  const rows = await query("SELECT id FROM users WHERE email=?", [email]);
+  const id = rows[0].id;
+  const score = scoreOf(lc, cf, cc); const solved = 180 + (lc % 120); const xp = xpOf(score, solved);
+  await run(`INSERT INTO profiles (user_id,cf_handle,lc_handle,cc_handle,cf_rating,cf_max_rating,lc_rating,lc_solved,cc_rating,cc_stars,score,xp,level,sync_status,last_synced_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT (user_id) DO UPDATE SET cf_rating=EXCLUDED.cf_rating, lc_rating=EXCLUDED.lc_rating, cc_rating=EXCLUDED.cc_rating, score=EXCLUDED.score, xp=EXCLUDED.xp, level=EXCLUDED.level, updated_at=EXCLUDED.updated_at`,
+    [id, handle, handle, handle, cf, cf + 120, lc, solved, cc, stars(cc), score, xp, levelFor(xp), "ok", now, now]);
+  console.log("seeded", name, "score", score);
+}
+console.log("done - demo login: aarav@demo.pixelrank / demo1234");
+process.exit(0);
