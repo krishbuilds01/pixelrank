@@ -1,12 +1,11 @@
 import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 import fs from "node:fs";
+import type { Pool } from "pg";
 
-const dir = path.join(process.cwd(), "data");
-if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-const db = new DatabaseSync(path.join(dir, "pixelrank.db"));
-db.exec("PRAGMA journal_mode = WAL;");
-db.exec(`
+// Postgres (Supabase) when DATABASE_URL is set, local SQLite file otherwise.
+// Call sites write SQL with ? placeholders; they are converted to $1, $2 for Postgres.
+const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL, college TEXT NOT NULL DEFAULT '',
@@ -26,8 +25,50 @@ CREATE TABLE IF NOT EXISTS profiles (
   sync_status TEXT NOT NULL DEFAULT 'never', sync_error TEXT, last_synced_at TEXT,
   updated_at TEXT NOT NULL
 );
-`);
-export default db;
+`;
+
+type Row = Record<string, unknown>;
+const clean = (params: unknown[]) => params.map((v) => (v === undefined ? null : v));
+const toPg = (sql: string) => { let i = 0; return sql.replace(/\?/g, () => `$${++i}`); };
+
+let sqlite: DatabaseSync | null = null;
+function getSqlite(): DatabaseSync {
+  if (!sqlite) {
+    const dir = path.join(process.cwd(), "data");
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    sqlite = new DatabaseSync(path.join(dir, "pixelrank.db"));
+    sqlite.exec("PRAGMA journal_mode = WAL;");
+    sqlite.exec(SCHEMA);
+  }
+  return sqlite;
+}
+
+let pool: Pool | null = null;
+let pgReady: Promise<void> | null = null;
+async function getPool(): Promise<Pool> {
+  if (!pool) {
+    const { Pool: PgPool } = await import("pg");
+    pool = new PgPool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false }, max: 5 });
+    pgReady = pool.query(SCHEMA).then(() => undefined);
+  }
+  await pgReady;
+  return pool;
+}
+
+const usePg = () => Boolean(process.env.DATABASE_URL);
+
+export async function q(sql: string, params: unknown[] = []): Promise<Row[]> {
+  if (usePg()) { const p = await getPool(); const r = await p.query(toPg(sql), clean(params) as never[]); return r.rows as Row[]; }
+  return getSqlite().prepare(sql).all(...(clean(params) as never[])) as unknown as Row[];
+}
+export async function q1<T = Row>(sql: string, params: unknown[] = []): Promise<T | null> {
+  const rows = await q(sql, params);
+  return (rows[0] as T) ?? null;
+}
+export async function run(sql: string, params: unknown[] = []): Promise<void> {
+  if (usePg()) { const p = await getPool(); await p.query(toPg(sql), clean(params) as never[]); return; }
+  getSqlite().prepare(sql).run(...(clean(params) as never[]));
+}
 
 export type UserRow = {
   id: string; name: string; email: string; password_hash: string;
