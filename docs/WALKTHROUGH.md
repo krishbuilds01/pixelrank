@@ -18,9 +18,9 @@ Sign up -> save handles -> Sync -> the server calls each platform, stores the ra
 - Code in src/lib/scoring.ts, tests in tests/scoring.test.ts.
 
 ## Data
-- SQLite through Node's built in node:sqlite, no ORM. Tables: users, sessions, profiles. See src/lib/db.ts.
+- Postgres through the pg package when DATABASE_URL is set (Supabase in production), SQLite through Node's built in node:sqlite for local dev otherwise. No ORM. Tables: users, sessions, profiles. See src/lib/db.ts.
 - Passwords are hashed with bcrypt. Sessions are random tokens in an httpOnly cookie, stored in the sessions table.
-- Why SQLite: zero setup, works anywhere Node runs. Moving to Postgres later means changing src/lib/db.ts only, the rest of the app talks to it through small helpers.
+- Why both: SQLite is zero setup for local dev. Production needs a hosted database because a file does not persist on Vercel, so the same helpers (q, q1, run in src/lib/db.ts) talk to Postgres there. Call sites write SQL with ? placeholders and the layer converts them for Postgres.
 
 ## Leaderboards
 - One query: public users with a score, ordered by score then XP. College, country, branch and batch boards are filters on the same rows - that is the multi-tenant part.
@@ -33,5 +33,4 @@ Sign up -> save handles -> Sync -> the server calls each platform, stores the ra
 
 ## What is not in yet (next improvements)
 - Email reminders for contests (the contest data is ready for it)
-- Postgres + a hosted deploy (Vercel needs a hosted DB, SQLite file will not persist there)
 - Rating history graph on the dashboard

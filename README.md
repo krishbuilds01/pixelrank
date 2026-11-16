@@ -31,7 +31,7 @@ npm run dev
 
 Open http://localhost:3000
 
-Data is stored in a local SQLite file at data/pixelrank.db, created on first run. No external services or API keys are needed.
+Data is stored in Postgres when DATABASE_URL is set (Supabase in production), and in a local SQLite file at data/pixelrank.db otherwise, created on first run. No API keys are needed.
 
 ## Test
 
@@ -42,7 +42,7 @@ npm run build
 
 ## Stack
 
-Next.js, TypeScript, Tailwind CSS, SQLite (node:sqlite), bcrypt, zod, vitest.
+Next.js, TypeScript, Tailwind CSS, Postgres (pg) / SQLite (node:sqlite), bcrypt, zod, vitest.
 
 ## How it works
 
